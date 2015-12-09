@@ -1,4 +1,4 @@
-from mininet.net import mininet
+from mininet.net import Mininet
 from mininet.node import OVSSwitch, Controller, RemoteController
 from mininet.topolib import TreeTopo
 from mininet.cli import CLI
