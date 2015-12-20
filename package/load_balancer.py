@@ -7,13 +7,14 @@ import sys
 
 from learning_switch import l2_learning
 log = core.getLogger()
+# sudo mn --arp --topo single,4 --mac --switch ovsk --controller remote
 
 
 virtual_ip = IPAddr("10.0.0.254")
 virtual_mac = EthAddr("00:00:00:00:00:FF")
 
 server = []
-for i in xrange(2, 13):
+for i in xrange(2, 4):
   server.append({
     'ip': IPAddr("10.0.0.%d" % i),
     'mac': EthAddr('00:00:00:00:00:%02d' % i),
