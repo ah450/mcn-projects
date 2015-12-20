@@ -25,6 +25,7 @@ server_index = 0
 
 
 def _handle_PacketIn (event):
+    global server_index
     packet = event.parsed
 
     # Only handle IPv4 flows
