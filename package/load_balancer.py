@@ -11,6 +11,8 @@ from pox.lib.revent import *
 import time
 
 log = core.getLogger()
+IDLE_TIMEOUT = 60 # in seconds
+HARD_TIMEOUT = 0 # infinity
 LOAD_BALANCER_IP = IPAddr('10.0.0.254')
 LOAD_BALANCER_MAC = EthAddr('00:00:00:00:00:FE')
 
