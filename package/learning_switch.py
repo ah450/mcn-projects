@@ -83,7 +83,7 @@ class LearningSwitch(object):
         msg.in_port = event.port
         self.connection.send(msg)
 
-    self.macToPort[packet.src] = event.port
+    self.macToPortTranslationTable[packet.src] = event.port
 
     if not self.transparent:
       if packet.type == packet.LLDP_TYPE or packet.dst.isBridgeFiltered():
@@ -91,10 +91,10 @@ class LearningSwitch(object):
     elif packet.dst.is_multicast:
       flood()
     else:
-      if packet.dst not in self.macToPort:
+      if packet.dst not in self.macToPortTranslationTable:
         flood("Port for %s unknown -- flooding" % (packet.dst,))
       else:
-        port = self.macToPort[packet.dst]
+        port = self.macToPortTranslationTable[packet.dst]
         if port == event.port:
           log.warning("Same port for packet from %s -> %s on %s.%s.  Drop."
             % (packet.src, packet.dst, dpid_to_str(event.dpid), port))
