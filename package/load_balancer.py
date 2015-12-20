@@ -1,175 +1,82 @@
-"""
-Simple round-robin
-"""
 from pox.core import core
+from pox.lib.addresses import IPAddr,EthAddr,parse_cidr
+from pox.lib.revent import EventContinue,EventHalt
 import pox.openflow.libopenflow_01 as of
 from pox.lib.util import dpidToStr
-from pox.lib.packet.ethernet import ethernet
-from pox.lib.packet.arp import arp
-from pox.lib.addresses import IPAddr, EthAddr
-from pox.lib.revent import *
-import time
+import sys
 
 log = core.getLogger()
-IDLE_TIMEOUT = 60 # in seconds
-HARD_TIMEOUT = 0 # infinity
-LOAD_BALANCER_IP = IPAddr('10.0.0.254')
-LOAD_BALANCER_MAC = EthAddr('00:00:00:00:00:FE')
 
-class LoadBalancer(EventMixin):
+############## Global constants #############
 
-  class Server(object):
-    def __init__(self, ip, mac, port):
-      super(LoadBalancer.Server, self).__init__()
-      self.ip = IPAddr(ip)
-      self.mac = EthAddr(mac)
-      self.port = port
-      
-  def __init__(self, connection):
-    super(LoadBalancer, self).__init__()
-    self.connection = connection
-    self.listenTo(connection)
-    self.servers = []
-    for i in xrange(1,6) :
-      ethaddr = '00:00:00:00:00:%02x' % i
-      ipaddr = '10.0.0.%d' % i
-      self.servers.append(self.Server(ipaddr, ethaddr, i))
-    self.last_server = 0
+virtual_ip = IPAddr("10.0.0.5")
+virtual_mac = EthAddr("00:00:00:00:00:05")
 
-    def get_next_server(self):
-      self.last_server = (self.last_server + 1) % len(self.servers)
-      return self.servers[self.last_server]
+server = {}
+server[0] = {'ip':IPAddr("10.0.0.2"), 'mac':EthAddr("00:00:00:00:00:02"), 'outport': 2}
+server[1] = {'ip':IPAddr("10.0.0.3"), 'mac':EthAddr("00:00:00:00:00:03"), 'outport': 3}
+server[2] = {'ip':IPAddr("10.0.0.4"), 'mac':EthAddr("00:00:00:00:00:04"), 'outport': 4}
+total_servers = len(server)
 
-    def handle_arp(self, packet, in_port):
-      # Get the ARP request from packet
-      arp_req = packet.next
+server_index = 0
 
-      # Create ARP reply
-      arp_rep = arp()
-      arp_rep.opcode = arp.REPLY
-      arp_rep.hwsrc = LOAD_BALANCER_MAC
-      arp_rep.hwdst = arp_req.hwsrc
-      arp_rep.protosrc = LOAD_BALANCER_IP
-      arp_rep.protodst = arp_req.protosrc
+################ Handlers ###################
 
-      # Create the Ethernet packet
-      eth = ethernet()
-      eth.type = ethernet.ARP_TYPE
-      eth.dst = packet.src
-      eth.src = LOAD_BALANCER_MAC
-      eth.set_payload(arp_rep)
+def _handle_PacketIn (event):
+    global server_index
+    packet = event.parsed
 
-      # Send the ARP reply to client
-      msg = of.ofp_packet_out()
-      msg.data = eth.pack()
-      msg.actions.append(of.ofp_action_output(port = of.OFPP_IN_PORT))
-      msg.in_port = in_port
-      self.connection.send(msg)
+    # Only handle IPv4 flows
+    if (not event.parsed.find("ipv4")):
+        return EventContinue
 
-    def handle_request (self, packet, event):
+    msg = of.ofp_flow_mod()
+    msg.match = of.ofp_match.from_packet(packet)
 
-        # Get the next server to handle the request
-        server = self.get_next_server()
+    # Only handle traffic destined to virtual IP
+    if (msg.match.nw_dst != virtual_ip):
+        return EventContinue
 
-        "First install the reverse rule from server to client"
-        msg = of.ofp_flow_mod()
-        msg.idle_timeout = IDLE_TIMEOUT
-        msg.hard_timeout = HARD_TIMEOUT
-        msg.buffer_id = None
+    # Round robin selection of servers
+    index = server_index % total_servers
+    print index
+    selected_server_ip = server[index]['ip']
+    selected_server_mac = server[index]['mac']
+    selected_server_outport = server[index]['outport']
+    server_index += 1
 
-        # Set packet matching
-        # Match (in_port, src MAC, dst MAC, src IP, dst IP)
-        msg.match.in_port = server.port
-        msg.match.dl_src = server.mac
-        msg.match.dl_dst = packet.src
-        msg.match.dl_type = ethernet.IP_TYPE
-        msg.match.nw_src = server.ip
-        msg.match.nw_dst = packet.next.srcip
+    # Setup route to server
+    msg.buffer_id = event.ofp.buffer_id
+    msg.in_port = event.port
 
-        # Append actions
-        # Set the src IP and MAC to load balancer's
-        # Forward the packet to client's port
-        msg.actions.append(of.ofp_action_nw_addr.set_src(LOAD_BALANCER_IP))
-        msg.actions.append(of.ofp_action_dl_addr.set_src(LOAD_BALANCER_MAC))
-        msg.actions.append(of.ofp_action_output(port = event.port))
+    msg.actions.append(of.ofp_action_dl_addr(of.OFPAT_SET_DL_DST, selected_server_mac))
+    msg.actions.append(of.ofp_action_nw_addr(of.OFPAT_SET_NW_DST, selected_server_ip))
+    msg.actions.append(of.ofp_action_output(port = selected_server_outport))
+    event.connection.send(msg)
 
-        self.connection.send(msg)
+    # Setup reverse route from server
+    reverse_msg = of.ofp_flow_mod()
+    reverse_msg.buffer_id = None
+    reverse_msg.in_port = selected_server_outport
 
-        "Second install the forward rule from client to server"
-        msg = of.ofp_flow_mod()
-        msg.idle_timeout = IDLE_TIMEOUT
-        msg.hard_timeout = HARD_TIMEOUT
-        msg.buffer_id = None
-        msg.data = event.ofp # Forward the incoming packet
+    reverse_msg.match = of.ofp_match()
+    reverse_msg.match.dl_src = selected_server_mac
+    reverse_msg.match.nw_src = selected_server_ip
+    reverse_msg.match.tp_src = msg.match.tp_dst
 
-        # Set packet matching
-        # Match (in_port, MAC src, MAC dst, IP src, IP dst)
-        msg.match.in_port = event.port
-        msg.match.dl_src = packet.src
-        msg.match.dl_dst = LOAD_BALANCER_MAC
-        msg.match.dl_type = ethernet.IP_TYPE
-        msg.match.nw_src = packet.next.srcip
-        msg.match.nw_dst = LOAD_BALANCER_IP
-        
-        # Append actions
-        # Set the dst IP and MAC to load balancer's
-        # Forward the packet to server's port
-        msg.actions.append(of.ofp_action_nw_addr.set_dst(server.ip))
-        msg.actions.append(of.ofp_action_dl_addr.set_dst(server.mac))
-        msg.actions.append(of.ofp_action_output(port = server.port))
+    reverse_msg.match.dl_dst = msg.match.dl_src
+    reverse_msg.match.nw_dst = msg.match.nw_src
+    reverse_msg.match.tp_dst = msg.match.tp_src
 
-        self.connection.send(msg)
+    reverse_msg.actions.append(of.ofp_action_dl_addr(of.OFPAT_SET_DL_SRC, virtual_mac))
+    reverse_msg.actions.append(of.ofp_action_nw_addr(of.OFPAT_SET_NW_SRC, virtual_ip))
+    reverse_msg.actions.append(of.ofp_action_output(port = msg.in_port))
+    event.connection.send(reverse_msg)
 
-        log.info("Installing %s <-> %s" % (packet.next.srcip, server.ip))
+    return EventHalt
 
-    def handle_PacketIn(self, event):
-      packet = event.parse()
-      if packet.type == packet.LLDP_TYPE or packet.type == packet.IPV6_TYPE:
-        # Drop LLDP packets
-        # Drop IPv6 packets
-        # send of command without actions
+def launch ():
+    # To intercept packets before the learning switch
+    core.openflow.addListenerByName("PacketIn", _handle_PacketIn, priority=2)
 
-        msg = of.ofp_packet_out()
-        msg.buffer_id = event.ofp.buffer_id
-        msg.in_port = event.port
-        self.connection.send(msg)
-
-      elif packet.type == packet.ARP_TYPE:
-        # Handle ARP request for load balancer
-
-        # Only accept ARP request for load balancer
-        if packet.next.protodst != LOAD_BALANCER_IP:
-          return
-
-        log.debug("Receive an ARP request")
-        self.handle_arp(packet, event.port)
-
-      elif packet.type == packet.IP_TYPE:
-        # Handle client's request
-
-        # Only accept ARP request for load balancer
-        if packet.next.dstip != LOAD_BALANCER_IP:
-          return
-
-        log.debug("Receive an IPv4 packet from %s" % packet.next.srcip)
-        self.handle_request(packet, event)
-
-
-
-    
-
-
-
-
-class load_balancer(EventMixin):
-
-  def __init__ (self):
-    self.listenTo(core.openflow)
-
-  def _handle_ConnectionUp (self, event):
-    log.debug("Connection %s" % event.connection)
-    LoadBalancer(event.connection)
-
-
-def launch():
-  core.registerNew(load_balancer)
+    log.info("Stateless LB running.")
