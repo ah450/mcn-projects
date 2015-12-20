@@ -5,6 +5,7 @@ import pox.openflow.libopenflow_01 as of
 from pox.lib.util import dpidToStr
 import sys
 
+from learning_switch import l2_learning
 log = core.getLogger()
 
 ############## Global constants #############
@@ -78,5 +79,6 @@ def _handle_PacketIn (event):
 def launch ():
     # To intercept packets before the learning switch
     core.openflow.addListenerByName("PacketIn", _handle_PacketIn, priority=2)
+    core.registerNew(l2_learning, False)
 
     log.info("Stateless LB running.")
