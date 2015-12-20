@@ -1,6 +1,6 @@
 from mininet.net import Mininet
 from mininet.topolib import TreeTopo
-from mininet import RemoteController
+from mininet.node import RemoteController
 from mininet.cli import CLI
 
 tree4 = TreeTopo(depth=2,fanout=2)
