@@ -12,10 +12,7 @@ log = core.getLogger()
 virtual_ip = IPAddr("10.0.0.254")
 virtual_mac = EthAddr("00:00:00:00:00:FF")
 
-server = {}
-server[0] = {'ip':IPAddr("10.0.0.2"), 'mac':EthAddr("00:00:00:00:00:02"), 'outport': 2}
-server[1] = {'ip':IPAddr("10.0.0.3"), 'mac':EthAddr("00:00:00:00:00:03"), 'outport': 3}
-server[2] = {'ip':IPAddr("10.0.0.4"), 'mac':EthAddr("00:00:00:00:00:04"), 'outport': 4}
+server = []
 for i in xrange(2, 13):
   server.append({
     'ip': IPAddr("10.0.0.%d" % i),
@@ -28,7 +25,6 @@ server_index = 0
 
 
 def _handle_PacketIn (event):
-    global server_index
     packet = event.parsed
 
     # Only handle IPv4 flows
