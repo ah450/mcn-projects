@@ -52,7 +52,6 @@ class LearningSwitch(object):
 
   def _handle_PacketIn(self, event):
     packet = event.parsed
-
     def flood(message=None):
       """Floods the packet"""
       msg = of.ofp_packet_out()
@@ -88,7 +87,8 @@ class LearningSwitch(object):
     if not self.transparent:
       if packet.type == packet.LLDP_TYPE or packet.dst.isBridgeFiltered():
         drop()
-    elif packet.dst.is_multicast:
+        return
+    if packet.dst.is_multicast:
       flood()
     else:
       if packet.dst not in self.macToPortTranslationTable:
