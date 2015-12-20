@@ -10,8 +10,8 @@ log = core.getLogger()
 # sudo mn --arp --topo single,4 --mac --switch ovsk --controller remote
 
 
-virtual_ip = IPAddr("10.0.0.254")
-virtual_mac = EthAddr("00:00:00:00:00:FF")
+virtual_ip = IPAddr("10.0.0.5")
+virtual_mac = EthAddr("00:00:00:00:00:05")
 
 server = []
 for i in xrange(2, 4):
