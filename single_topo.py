@@ -1,5 +1,5 @@
 from mininet.net import Mininet
-from mininet.topolib import SingleSwitchTopo
+from mininet.topo import SingleSwitchTopo
 from mininet.node import RemoteController
 from mininet.cli import CLI
 
