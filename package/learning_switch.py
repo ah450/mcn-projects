@@ -126,7 +126,7 @@ class l2_learning (object):
     LearningSwitch(event.connection, self.transparent)
 
 
-def launch (transparent=False, hold_down=_flood_delay):
+def launch (transparent=False):
   """
   Starts an L2 learning switch.
   """
