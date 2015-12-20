@@ -31,7 +31,7 @@ class LoadBalancer(EventMixin):
     for i in xrange(1,6) :
       ethaddr = '00:00:00:00:00:%02x' % i
       ipaddr = '10.0.0.%d' % i
-      self.servers.append(self.Server(ethaddr, ipaddr, i))
+      self.servers.append(self.Server(ipaddr, ethaddr, i))
     self.last_server = 0
 
     def get_next_server(self):
