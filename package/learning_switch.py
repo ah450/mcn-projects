@@ -56,7 +56,8 @@ class LearningSwitch(object):
     def flood(message=None):
       """Floods the packet"""
       msg = of.ofp_packet_out()
-      log.debug(message) if message is not None
+      if message is not None:
+        log.debug(message)
       msg.actions.append(of.ofp_action_output(port = of.OFPP_FLOOD))
       msg.data = event.ofp
       msg.in_port = event.port
