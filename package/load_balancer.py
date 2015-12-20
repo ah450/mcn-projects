@@ -17,14 +17,12 @@ LOAD_BALANCER_MAC = EthAddr('00:00:00:00:00:FE')
 class LoadBalancer(EventMixin):
 
   class Server(object):
-    """docstring for Server"""
     def __init__(self, ip, mac, port):
-      super(Server, self).__init__()
+      super(LoadBalancer.Server, self).__init__()
       self.ip = IPAddr(ip)
       self.mac = EthAddr(mac)
       self.port = port
       
-
   def __init__(self, connection):
     super(LoadBalancer, self).__init__()
     self.connection = connection
